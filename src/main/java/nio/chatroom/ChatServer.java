@@ -22,6 +22,13 @@ import java.util.Iterator;
 @Slf4j
 public class ChatServer implements Runnable {
 
+    private static final Logger logger = LoggerFactory.getLogger(ChatServer.class);
+
+    public static void main(String[] args) {
+        ChatServer chatServer = new ChatServer();
+        new Thread(chatServer).start();
+    }
+
     @Override
     public void run() {
         Selector selector = null;
@@ -46,10 +53,13 @@ public class ChatServer implements Runnable {
                         SocketChannel socketChannel = serverSocket.accept();
                         socketChannel.configureBlocking(false);
                         socketChannel.register(selector, SelectionKey.OP_READ, ByteBuffer.allocate(1024));
-                        log.info("socket address connect : {}", serverSocket.getLocalAddress());
-                    } else {
-                        String message = processSocketRead(selectionKey);
-                        sendMessageToOther(message, selector.keys().iterator());
+                        log.info("socket address connect : {}", socketChannel);
+                    } else if (selectionKey.isReadable()) {
+                        SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
+                        ByteBuffer byteBuffer = (ByteBuffer) selectionKey.attachment();
+                        String message = processSocketRead(socketChannel, byteBuffer);
+                        log.info("socketChannel : {} , message : {}", socketChannel, message);
+                        sendMessageToOther(message, selector.keys().iterator(), socketChannel);
                     }
 
                     selectionKeyIterator.remove();
@@ -79,15 +89,12 @@ public class ChatServer implements Runnable {
 
     }
 
-    private String processSocketRead(SelectionKey selectionKey) throws IOException {
-        SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
-        ByteBuffer byteBuffer = (ByteBuffer) selectionKey.attachment();
-
+    private String processSocketRead(SocketChannel socketChannel, ByteBuffer byteBuffer) throws IOException {
         StringBuffer stringBuffer = new StringBuffer();
-        while (socketChannel.read(byteBuffer) != -1) {
+        while (socketChannel.read(byteBuffer) > 0) {
             byteBuffer.flip();
 
-            String s = new String(byteBuffer.array());
+            String s = new String(byteBuffer.array(), 0, byteBuffer.limit());
             stringBuffer.append(s);
 
             byteBuffer.clear();
@@ -97,15 +104,19 @@ public class ChatServer implements Runnable {
         return stringBuffer.toString();
     }
 
-    private void sendMessageToOther(String message, Iterator<SelectionKey> selectionKeyIterator) throws IOException {
+    private void sendMessageToOther(String message, Iterator<SelectionKey> selectionKeyIterator, SocketChannel socketChannel) throws IOException {
         while (selectionKeyIterator.hasNext()) {
             SelectionKey selectionKey = selectionKeyIterator.next();
             if (selectionKey.channel() instanceof SocketChannel) {
-                SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
+                SocketChannel channel = (SocketChannel) selectionKey.channel();
+                if (channel == socketChannel) {
+                    continue;
+                }
                 ByteBuffer buffer = (ByteBuffer) selectionKey.attachment();
                 buffer.put(message.getBytes(StandardCharsets.UTF_8));
                 buffer.flip();
-                socketChannel.write(buffer);
+                channel.write(buffer);
+                buffer.clear();
             }
         }
     }
