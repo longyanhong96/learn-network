@@ -21,6 +21,7 @@ public class NioServer {
     public static void main(String[] args) throws Exception {
         ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
         serverSocketChannel.bind(new InetSocketAddress("localhost", 8888));
+        serverSocketChannel.configureBlocking(false);
 
         Selector selector = Selector.open();
         serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
@@ -32,19 +33,27 @@ public class NioServer {
 
             while (keyIterator.hasNext()) {
                 SelectionKey selectionKey = keyIterator.next();
+                keyIterator.remove();
 
                 switch (selectionKey.interestOps()) {
                     case SelectionKey.OP_ACCEPT:
-                        SocketChannel accept = serverSocketChannel.accept();
-                        ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
-
-                        int read = accept.read(byteBuffer);
-                        Buffer flip = byteBuffer.flip();
-
-                        break;
-                    case SelectionKey.OP_CONNECT:
+                        ServerSocketChannel channel = (ServerSocketChannel) selectionKey.channel();
+                        SocketChannel socketChannel = channel.accept();
+                        socketChannel.configureBlocking(false);
+                        socketChannel.register(selector,SelectionKey.OP_READ);
                         break;
                     case SelectionKey.OP_READ:
+                        SocketChannel sc = (SocketChannel) selectionKey.channel();
+                        ByteBuffer byteBuffer = ByteBuffer.allocate(16);
+
+                        int read = sc.read(byteBuffer);
+                        System.out.println("read = " + read);
+
+                        byteBuffer.flip();
+                        String str = new String(byteBuffer.array(), 0, byteBuffer.limit());
+                        System.out.println("str = " + str);
+
+                        byteBuffer.clear();
                         break;
                     case SelectionKey.OP_WRITE:
                         break;
