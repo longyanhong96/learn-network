@@ -39,14 +39,10 @@ public class MultiThreadServer {
     }
 
     public void process() throws IOException {
-        ServerWorker serverWorker = new ServerWorker();
-        serverWorker.init();
-        new Thread(serverWorker).start();
-
+        ServerWorker[] serverWorkers = new ServerWorker[2];
         while (true) {
             selector.select();
             Iterator<SelectionKey> selectionKeyIterator = selector.selectedKeys().iterator();
-
 
             while (selectionKeyIterator.hasNext()) {
                 SelectionKey selectionKey = selectionKeyIterator.next();
@@ -59,18 +55,25 @@ public class MultiThreadServer {
                     socketChannel.configureBlocking(false);
                     log.info("sc : {}", socketChannel);
 
-                    serverWorker.selector.wakeup();
-                    socketChannel.register(serverWorker.selector, SelectionKey.OP_READ);
+                    ServerWorker worker = serverWorkers[socketChannel.getRemoteAddress().hashCode() % 2];
+                    if (worker == null) {
+                        worker = new ServerWorker();
+                        worker.init();
+                        new Thread(worker).start();
+                        serverWorkers[socketChannel.getRemoteAddress().hashCode() % 2] = worker;
+                    }
+                    worker.process(socketChannel);
 
                 }
             }
         }
     }
 
-    public class ServerWorker implements Runnable{
+    public class ServerWorker implements Runnable {
 
         private boolean isInit = false;
         private Selector selector;
+        private LinkedBlockingDeque<SocketChannel> deque = new LinkedBlockingDeque<>();
 
 
         public void init() throws IOException {
@@ -79,32 +82,42 @@ public class MultiThreadServer {
             }
         }
 
-        public void process() throws IOException {
-            while (true) {
-                selector.select();
-                Iterator<SelectionKey> selectionKeyIterator = selector.selectedKeys().iterator();
-
-                while (selectionKeyIterator.hasNext()) {
-                    SelectionKey selectionKey = selectionKeyIterator.next();
-                    selectionKeyIterator.remove();
-
-                    if (selectionKey.isReadable()) {
-                        SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
-                        ByteBuffer byteBuffer = ByteBuffer.allocate(32);
-
-                        socketChannel.read(byteBuffer);
-                        byteBuffer.flip();
-                        String str = new String(byteBuffer.array());
-                        log.info("read str : {}", str);
-                    }
-                }
-            }
+        public void process(SocketChannel socketChannel) throws IOException {
+            //
+            deque.add(socketChannel);
+            this.selector.wakeup();
         }
 
         @Override
         public void run() {
             try {
-                process();
+                while (true) {
+                    selector.select();
+
+                    SocketChannel sc = deque.poll();
+                    if (sc != null) {
+                        sc.register(this.selector, SelectionKey.OP_READ);
+                    }
+
+                    Iterator<SelectionKey> selectionKeyIterator = selector.selectedKeys().iterator();
+
+                    while (selectionKeyIterator.hasNext()) {
+                        SelectionKey selectionKey = selectionKeyIterator.next();
+                        selectionKeyIterator.remove();
+
+                        if (selectionKey.isReadable()) {
+                            SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
+                            ByteBuffer byteBuffer = ByteBuffer.allocate(32);
+
+                            socketChannel.read(byteBuffer);
+                            byteBuffer.flip();
+                            String str = new String(byteBuffer.array());
+                            log.info("read {} str : {}", socketChannel.getRemoteAddress(), str);
+                        }
+                    }
+
+
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
