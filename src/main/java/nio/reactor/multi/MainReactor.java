@@ -1,19 +1,20 @@
-package nio.reactor;
+package nio.reactor.multi;
+
+import nio.reactor.simple.Reactor;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
 import java.util.Iterator;
 
 /**
- * @Description
+ * @Description 这个是simple reactor 河 multiThreadServer结合
  * @Author longyh
- * @Date 2023/1/11 18:08
+ * @Date 2023/1/12 13:16
  */
-public class Reactor {
+public class MainReactor {
 
     private final int port = 8888;
     private Selector selector;
@@ -26,19 +27,20 @@ public class Reactor {
 
         this.selector = Selector.open();
         SelectionKey sscKey = this.serverSocketChannel.register(this.selector, SelectionKey.OP_ACCEPT);
+        sscKey.attach(new MultiAcceptor(this.selector, this.serverSocketChannel));
 
     }
 
     public void process() throws IOException {
-        while (true){
-            this.selector.select();
-            Iterator<SelectionKey> selectionKeyIterator = this.selector.selectedKeys().iterator();
+        while (true) {
+            selector.select();
+            Iterator<SelectionKey> selectionKeyIterator = selector.selectedKeys().iterator();
 
-            while (selectionKeyIterator.hasNext()){
+            while (selectionKeyIterator.hasNext()) {
                 SelectionKey selectionKey = selectionKeyIterator.next();
                 selectionKeyIterator.remove();
 
-                if (selectionKey.isValid()){
+                if (selectionKey.isValid()) {
                     dispatch(selectionKey);
                 }
             }
@@ -46,15 +48,13 @@ public class Reactor {
     }
 
     private void dispatch(SelectionKey selectionKey) {
-
-        selectionKey.attachment();
+        Runnable attachment = (Runnable) selectionKey.attachment();
+        attachment.run();
     }
 
-    public class Acceptor{
-
-        public void process(SelectionKey selectionKey) throws IOException {
-            ServerSocketChannel ssc = (ServerSocketChannel) selectionKey.channel();
-            SocketChannel socketChannel = ssc.accept();
-        }
+    public static void main(String[] args) throws IOException {
+        MainReactor reactor = new MainReactor();
+        reactor.init();
+        reactor.process();
     }
 }
