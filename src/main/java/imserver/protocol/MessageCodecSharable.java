@@ -8,10 +8,7 @@ import io.netty.handler.codec.MessageToMessageCodec;
 import lombok.extern.slf4j.Slf4j;
 
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.util.List;
 
 @Slf4j
@@ -57,11 +54,20 @@ public class MessageCodecSharable extends MessageToMessageCodec<ByteBuf, Message
         byte[] bytes = new byte[length];
         in.readBytes(bytes, 0, length);
 
-        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bytes));
-        Message message = (Message) ois.readObject();
+        Class<? extends Message> messageClass = Message.getMessageClass(messageType);
+        Message message = deserialize(messageClass, bytes);
         log.debug("{}, {}, {}, {}, {}, {}", magicNum, version, serializerAlgorithm, messageType, sequenceId, length);
         log.debug("{}", message);
 
         list.add(message);
+    }
+
+    public <T> T deserialize(Class<T> clazz, byte[] bytes) {
+        try {
+            ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bytes));
+            return (T) ois.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            throw new RuntimeException("反序列化失败", e);
+        }
     }
 }

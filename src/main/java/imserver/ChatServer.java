@@ -1,6 +1,7 @@
 package imserver;
 
 
+import imserver.handler.ChatRequestMessageHandler;
 import imserver.handler.LoginRequestMessageHandler;
 import imserver.protocol.MessageCodecSharable;
 import io.netty.bootstrap.ServerBootstrap;
@@ -23,7 +24,13 @@ public class ChatServer {
 
     private LoggingHandler loggingHandler = new LoggingHandler(LogLevel.DEBUG);
     private MessageCodecSharable messageCodecSharable = new MessageCodecSharable();
+
+    /**
+     * handler
+     */
     private LoginRequestMessageHandler loginHandler = new LoginRequestMessageHandler();
+    private ChatRequestMessageHandler chatRequestMessageHandler = new ChatRequestMessageHandler();
+
 
     private void init() {
         this.boss = new NioEventLoopGroup();
@@ -42,7 +49,11 @@ public class ChatServer {
                     socketChannel.pipeline().addLast(new LengthFieldBasedFrameDecoder(1024, 12, 4, 0, 0));
                     socketChannel.pipeline().addLast(loggingHandler);
                     socketChannel.pipeline().addLast(messageCodecSharable);
+                    /**
+                     * handler
+                     */
                     socketChannel.pipeline().addLast(loginHandler);
+                    socketChannel.pipeline().addLast(chatRequestMessageHandler);
                 }
             });
 

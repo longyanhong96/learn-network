@@ -4,11 +4,12 @@ import imserver.message.LoginRequestMessage;
 import imserver.message.LoginResponseMessage;
 import imserver.service.UserServiceFactory;
 import imserver.session.SessionFactory;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 
 
-
+@ChannelHandler.Sharable
 public class LoginRequestMessageHandler extends SimpleChannelInboundHandler<LoginRequestMessage> {
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, LoginRequestMessage msg) throws Exception {

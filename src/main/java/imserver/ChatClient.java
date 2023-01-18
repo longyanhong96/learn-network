@@ -1,6 +1,8 @@
 package imserver;
 
+import imserver.message.ChatRequestMessage;
 import imserver.message.LoginRequestMessage;
+import imserver.message.LoginResponseMessage;
 import imserver.protocol.MessageCodecSharable;
 
 import io.netty.bootstrap.Bootstrap;
@@ -17,7 +19,9 @@ import io.netty.handler.logging.LoggingHandler;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
+import java.util.Arrays;
 import java.util.Scanner;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
@@ -27,6 +31,9 @@ public class ChatClient {
     private LoggingHandler loggingHandler = new LoggingHandler(LogLevel.DEBUG);
     private MessageCodecSharable messageCodecSharable = new MessageCodecSharable();
 
+    // 两个线程互动
+    private CountDownLatch WAIT_FOR_LOGIN = new CountDownLatch(1);
+    private AtomicBoolean LOGIN = new AtomicBoolean(false);
     private AtomicBoolean EXIT = new AtomicBoolean(false);
 
     private void process() {
@@ -55,6 +62,42 @@ public class ChatClient {
                                     LoginRequestMessage loginRequestMessage = new LoginRequestMessage(username, password);
                                     log.info("loginRequestMessage : {}", loginRequestMessage);
                                     ctx.writeAndFlush(loginRequestMessage);
+
+                                    try {
+                                        WAIT_FOR_LOGIN.await();
+                                    } catch (InterruptedException e) {
+                                        e.printStackTrace();
+                                    }
+
+                                    // 如果登录失败
+                                    if (!LOGIN.get()) {
+                                        ctx.channel().close();
+                                        return;
+                                    }
+
+                                    while (true) {
+                                        System.out.println("==================================");
+                                        System.out.println("send [username] [content]");
+                                        System.out.println("gsend [group name] [content]");
+                                        System.out.println("gcreate [group name] [m1,m2,m3...]");
+                                        System.out.println("gmembers [group name]");
+                                        System.out.println("gjoin [group name]");
+                                        System.out.println("gquit [group name]");
+                                        System.out.println("quit");
+                                        System.out.println("==================================");
+
+                                        String command = scanner.nextLine();
+                                        String[] s = command.split(" ");
+                                        switch (s[0]) {
+                                            case "send":
+                                                log.info("{}, {}", command, Arrays.toString(s));
+                                                ctx.writeAndFlush(new ChatRequestMessage(username, s[1], s[2]));
+                                                break;
+                                            default:
+                                                break;
+                                        }
+                                    }
+
                                 }
                             }).start();
                         }
@@ -62,6 +105,26 @@ public class ChatClient {
                         @Override
                         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
                             log.debug("msg: {}", msg);
+                            if (msg instanceof LoginResponseMessage) {
+                                LoginResponseMessage loginResponseMessage = (LoginResponseMessage) msg;
+                                if (loginResponseMessage.isSuccess()) {
+                                    LOGIN.set(true);
+                                }
+                                // 唤醒 system in 线程
+                                WAIT_FOR_LOGIN.countDown();
+                            }
+                        }
+
+                        @Override
+                        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+                            log.debug("连接已经断开，按任意键退出..");
+                            EXIT.set(true);
+                        }
+
+                        @Override
+                        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                            log.debug("连接已经断开，按任意键退出..{}", cause.getMessage());
+                            EXIT.set(true);
                         }
                     });
 
