@@ -1,8 +1,11 @@
 package imserver.session;
 
+import lombok.Data;
+
 import java.util.Collections;
 import java.util.Set;
 
+@Data
 public class Group {
     // 聊天室名称
     private String name;

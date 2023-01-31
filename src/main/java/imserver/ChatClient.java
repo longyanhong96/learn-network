@@ -1,6 +1,7 @@
 package imserver;
 
 import imserver.message.ChatRequestMessage;
+import imserver.message.GroupCreateRequestMessage;
 import imserver.message.LoginRequestMessage;
 import imserver.message.LoginResponseMessage;
 import imserver.protocol.MessageCodecSharable;
@@ -19,8 +20,7 @@ import io.netty.handler.logging.LoggingHandler;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
-import java.util.Arrays;
-import java.util.Scanner;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -90,8 +90,12 @@ public class ChatClient {
                                         String[] s = command.split(" ");
                                         switch (s[0]) {
                                             case "send":
-                                                log.info("{}, {}", command, Arrays.toString(s));
                                                 ctx.writeAndFlush(new ChatRequestMessage(username, s[1], s[2]));
+                                                break;
+                                            case "gcreate":
+                                                Set<String> members = new HashSet<>(Arrays.asList(s[2].split(",")));
+                                                members.add(username);
+                                                ctx.writeAndFlush(new GroupCreateRequestMessage(s[1], members));
                                                 break;
                                             default:
                                                 break;
